@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colored Neighbors Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            font-family: 'Inter', sans-serif;
+            gap: 50px;
+            text-align: center;
+        }
+        
+        .score {
+            display: flex;
+            justify-content: space-between;
+            width: 20%;
+        }
+
+        .title {
+            font-size: xx-large;
+            text-align: center;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-rows: repeat(6, 50px);
+            gap: 4px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .grid-row {
+            display: flex;
+            gap: 3px;
+        }
+
+        .grid-cell {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            background-color: lightgrey;
+            border-radius: 5px;
+        }
+
+        .player1 { background-color: red; }
+        .player2 { background-color: blue; }
+        .player1-aura { background-color: #ffcccc; }
+        .player2-aura { background-color: #ccccff; }
+        .player1-aura.player2-aura { background-color: lightsalmon;}
+
+        #popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 15px;
+            padding-left: 20px;
+            padding-right: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            z-index: 999;
+            gap: 28px;
+            transition: opacity 0.3s ease;
+            height: fit-content;
+            opacity: 0;
+            width: fit-content;
+            flex-direction: column;
+        }
+
+        #popupfast {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 15px;
+            padding-left: 20px;
+            padding-right: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            z-index: 999;
+            transition: opacity 0.3s ease;
+            height: fit-content;
+            opacity: 0;
+            width: fit-content;
+            flex-direction: column;
+        }
+
+        #popupfast.show {
+            opacity: 1;
+        }
+
+        #popup.show {
+            opacity: 1;
+        }
+
+        .popup-content {
+            font-size: large;
+            text-align: center;
+            margin: auto;
+        }
+
+        .close-button::before {
+            content: "✕";
+            font-size: 18px;
+        }
+
+        .popup-button {
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: fit-content;
+            height: fit-content;
+            margin: auto;
+        }
+
+        .popup-button:hover {
+            background-color: #2980b9;
+        }
+
+        #reset {
+            display: none;
+        }
+
+        .close-button {
+            right: 15px;
+            cursor: pointer;
+            border: none;
+            background-color: white;
+            opacity: 1;
+            transition: 0.3s;
+            width: fit-content;
+            margin: auto;
+            margin-right: 0;
+        }
+
+        .close-button:hover {
+            background-color: lightgrey;
+            border-radius: 5px;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">Hokaku</div>
+    <div class="score">
+        <div id="p1score" style="color: red;">Player 1 wins: 0</div>
+        <div id="p2score" style="color: blue;">Player 2 wins: 0</div>
+    </div>
+    <div id="turncount" style="font-size: x-large;">Turn 1</div>
+    <div id="currentmove" style="font-size: large;">Current Move: Player1</div>
+    <div id="grid-container" class="grid-container"></div>
+    <button id="reset" onclick="handleReset()">Reset Game</button>
+    <div id="popupfast">
+        <div id="popupfast-content"></div>
+    </div>
+    <div id="popup" class="popup">
+        <button class="close-button" onclick="closePopup()"></button>
+        <div class="popup-content" id="popup-text"></div>
+        <button class="popup-button" id="play-again" onclick="handleReset()">Play Again</button>
+    </div>
+
+    <script>
+        var currentPlayer = 1;
+
+        function handleClick(event) {
+            var cell = event.target;
+
+            if (cell.classList.contains('player1') || cell.classList.contains('player2')) {
+                displayFastPopup("Cannot place a shrine on another shrine!");
+                return;
+            }
+
+            if (cell.classList.contains('player1-aura') && cell.classList.contains('player2-aura')) {
+                displayFastPopup("Cannot place a shrine on contested land!");
+                return;
+            }
+
+
+            if ((currentPlayer === 1 && cell.classList.contains('player2-aura')) || (currentPlayer === 2 && cell.classList.contains('player1-aura'))) {
+                displayFastPopup("Cannot place a shrine on opponents land!");
+                return;
+            }
+
+            cell.classList.add(currentPlayer === 1 ? 'player1' : 'player2');
+            cell.classList.remove('player1-aura', 'player2-aura', 'empty');
+
+            var neighbors = getNeighbors(cell);
+
+            neighbors.forEach(function (neighbor) {
+                if (neighbor && !neighbor.classList.contains('player1') && !neighbor.classList.contains('player2')) {
+                    neighbor.classList.add(currentPlayer === 1 ? 'player1-aura' : 'player2-aura');
+                    neighbor.classList.remove('empty');
+                }
+            });
+
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            updateTurn();
+
+
+            var getPossibleMoves = document.querySelectorAll(currentPlayer === 1 ? '.player1-aura:not(.player2-aura), .empty' : '.player2-aura:not(.player1-aura), .empty');
+
+            if (getPossibleMoves.length === 0) {
+                displayPopup("No moves left for Player " + currentPlayer + ". Player " + currentPlayer + " loses!");
+                updateScore(currentPlayer);
+            }
+        }
+
+        function getNeighbors(cell) {
+            var row = cell.parentNode;
+            var rowIndex = Array.from(row.parentNode.children).indexOf(row);
+            var colIndex = Array.from(row.children).indexOf(cell);
+
+            var neighbors = [];
+
+            neighbors.push(getCell(colIndex - 1, rowIndex));
+            neighbors.push(getCell(colIndex + 1, rowIndex));
+            neighbors.push(getCell(colIndex, rowIndex - 1));
+            neighbors.push(getCell(colIndex, rowIndex + 1));
+
+            return neighbors;
+        }
+
+        function getCell(colIndex, rowIndex) {
+            var rows = document.getElementsByClassName('grid-row');
+            var row = rows[rowIndex];
+            return row ? row.children[colIndex] : null;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var grid = document.getElementById('grid-container');
+
+            for (var i = 0; i < 6; ++i) {
+                var row = document.createElement('div');
+                row.classList.add('grid-row');
+
+                for (var j = 0; j < 5; ++j) {
+                    var elemDiv = document.createElement('div');
+                    elemDiv.classList.add('grid-cell', 'empty');
+                    elemDiv.addEventListener('click', handleClick);
+                    row.appendChild(elemDiv);
+                }
+
+                grid.appendChild(row);
+            }
+
+            // document.getElementById('reset').style.display = 'block';
+        });
+
+        var turnCount = 1;
+
+        function updateTurn() {
+            turnCount += 1;
+            var elem = document.getElementById('turncount');
+            elem.innerText = "Turn " + turnCount;
+
+        }
+
+        var p1score = 0;
+        var p2score = 0;
+        function updateScore(playerWin) {
+            if (playerWin === 1) {
+                p1score += 1;
+                var elem = document.getElementById('p1score');
+                elem.innerText = "Player 1 wins: " + p1score;
+            } else {
+                p2score += 1;
+                var elem = document.getElementById('p2score');
+                elem.innerText = "Player 2 wins: " + p2score;
+            }
+        }
+
+
+        function handleReset() {
+            var getCells = document.querySelectorAll('.grid-cell');
+
+            for (var cell of getCells) {
+                cell.classList.remove(...cell.classList);
+                cell.classList.add('grid-cell', 'empty');
+            }
+            
+            turnCount = 0;
+            updateTurn();
+            closePopup();
+        }
+        function displayFastPopup(message) {
+            var popup = document.getElementById('popupfast');
+            var popupText = document.getElementById('popupfast-content');
+            popupText.innerText = message;
+            popup.style.display = 'flex';
+
+            setTimeout(function () {
+                popup.classList.add('show');
+            }, 10);
+
+            setTimeout(function () {
+                popup.classList.remove('show');
+            }, 1200);
+
+            setTimeout(function () {
+                popup.style.display = 'none';
+            }, 1600);
+            
+        }
+
+        function displayPopup(message) {
+            var popup = document.getElementById('popup');
+            var popupText = document.getElementById('popup-text');
+            var playAgainButton = document.getElementById('play-again');
+
+            popupText.innerText = message;
+
+            var getPossibleMoves = currentPlayer === 1 ? document.querySelectorAll('.player1-aura:not(.player2-aura), .empty') : document.querySelectorAll('.player2-aura:not(.player1-aura), .empty');
+            
+            playAgainButton.style.display = getPossibleMoves.length === 0 ? 'block' : 'none';
+
+            popup.style.display = 'flex';
+
+            setTimeout(function () {
+                popup.classList.add('show');
+            }, 10);
+        }
+
+        function closePopup() {
+            var popup = document.getElementById('popup');
+            popup.classList.remove('show');
+
+            setTimeout(function () {
+                popup.style.display = 'none';
+            }, 300);
+        }
+    </script>
+</body>
+</html>
